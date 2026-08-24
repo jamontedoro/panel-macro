@@ -131,7 +131,12 @@ def bajar_btc():
     puntos = {}
     inicio = int(datetime(2011, 8, 1, tzinfo=timezone.utc).timestamp())
     fin = int(datetime.now(timezone.utc).timestamp())
-    while inicio < fin:
+    vueltas = 0
+    # Bitstamp devuelve menos de 1000 velas cuando hay huecos en la serie vieja:
+    # cortar por "vinieron menos de las pedidas" deja la historia trunca. Se avanza
+    # hasta alcanzar la fecha de hoy y se corta solo si la ventana no progresa.
+    while inicio < fin and vueltas < 60:
+        vueltas += 1
         url = (
             "https://www.bitstamp.net/api/v2/ohlc/btcusd/"
             f"?step=86400&limit=1000&start={inicio}"
@@ -139,15 +144,20 @@ def bajar_btc():
         js = pedir(url).json()
         velas = js.get("data", {}).get("ohlc", [])
         if not velas:
-            break
+            # ventana vacia: saltar 1000 dias y seguir buscando
+            inicio += 1000 * 86400
+            continue
         for v in velas:
             f = datetime.fromtimestamp(int(v["timestamp"]), tz=timezone.utc).date()
             puntos[f] = float(v["close"])
-        inicio = int(velas[-1]["timestamp"]) + 86400
-        if len(velas) < 1000:
+        siguiente = int(velas[-1]["timestamp"]) + 86400
+        if siguiente <= inicio:  # la API no avanzo: cortar en vez de girar en falso
             break
+        inicio = siguiente
     if not puntos:
         raise RuntimeError("Bitstamp sin datos")
+    if len(puntos) < 3000:
+        avisar("Bitcoin", f"solo se obtuvieron {len(puntos)} dias de historia")
     # el cierre de hoy todavia no existe en OHLC: lo completa el spot de Coinbase
     try:
         spot = pedir("https://api.coinbase.com/v2/prices/BTC-USD/spot").json()
