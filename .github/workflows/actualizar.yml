@@ -1,0 +1,44 @@
+name: Actualizar panel
+
+on:
+  schedule:
+    # 11:00 en Argentina = 14:00 UTC. Argentina no cambia de hora.
+    - cron: "0 14 * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: panel-macro
+  cancel-in-progress: false
+
+jobs:
+  actualizar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Instalar dependencias
+        run: pip install -r requirements.txt
+
+      - name: Descargar datos y armar el panel
+        run: python actualizar.py
+
+      - name: Guardar los cambios
+        run: |
+          git config user.name  "Panel macro"
+          git config user.email "actions@github.com"
+          git add index.html datos/
+          if git diff --staged --quiet; then
+            echo "Sin cambios."
+          else
+            git commit -m "Datos al $(TZ=America/Argentina/Buenos_Aires date +%d/%m/%Y)"
+            git push
+          fi
