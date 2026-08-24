@@ -1,0 +1,391 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Panel macro Argentina</title>
+<style>
+  :root{
+    --azul:#1F4E79; --negro:#222933; --gris:#555B66; --linea:#dfe3e8;
+    --fondo:#f4f6f8; --panel:#ffffff; --verde:#1b7a4b; --rojo:#b3261e;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{ --azul:#7db3e0; --negro:#e8ecf1; --gris:#a3abb8; --linea:#333a44;
+           --fondo:#161a20; --panel:#1e242c; --verde:#4bbd85; --rojo:#e8756b; }
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--fondo);color:var(--negro);
+       font:10pt/1.5 Verdana,Geneva,sans-serif;-webkit-text-size-adjust:100%}
+  .wrap{max-width:1240px;margin:0 auto;padding:20px 16px 64px}
+  header h1{font-size:18pt;color:var(--azul);margin:0 0 4px;letter-spacing:-.2px}
+  header .sub{color:var(--gris);font-size:8.5pt;margin-bottom:18px}
+  header h1::after{content:"";display:block;width:64px;height:3px;
+       background:var(--azul);margin-top:8px;border-radius:2px}
+
+  .barra{background:var(--panel);border:1px solid var(--linea);border-radius:10px;
+         padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;
+         margin-bottom:18px;position:sticky;top:0;z-index:20}
+  .barra label{font-size:8.5pt;color:var(--gris);margin-right:6px}
+  .barra input[type=date]{font:9pt Verdana,sans-serif;padding:5px 8px;border-radius:6px;
+         border:1px solid var(--linea);background:var(--panel);color:var(--negro)}
+  .rapidos{display:flex;gap:6px;flex-wrap:wrap}
+  .rapidos button{font:8.5pt Verdana,sans-serif;padding:5px 11px;border-radius:14px;
+         border:1px solid var(--linea);background:transparent;color:var(--gris);cursor:pointer}
+  .rapidos button:hover{border-color:var(--azul);color:var(--azul)}
+  .rapidos button[aria-pressed=true]{background:var(--azul);border-color:var(--azul);color:#fff}
+
+  .grid{display:grid;gap:14px;grid-template-columns:repeat(auto-fill,minmax(290px,1fr))}
+  .seccion{margin:26px 0 10px;font-size:11pt;font-weight:bold;color:var(--azul)}
+  .card{background:var(--panel);border:1px solid var(--linea);border-radius:10px;padding:14px}
+  .card .nom{font-size:8.5pt;color:var(--gris);margin-bottom:2px}
+  .card .val{font-size:15pt;font-weight:bold;letter-spacing:-.3px}
+  .card .var{font-size:8.5pt;margin-top:2px}
+  .up{color:var(--verde)} .down{color:var(--rojo)} .flat{color:var(--gris)}
+  .card .pie{font-size:7.5pt;color:var(--gris);margin-top:6px}
+  .card svg{display:block;width:100%;height:64px;margin-top:8px;overflow:visible}
+
+  .ancho{grid-column:1/-1;background:var(--panel);border:1px solid var(--linea);
+         border-radius:10px;padding:16px}
+  .ancho h3{margin:0 0 2px;font-size:11pt;color:var(--azul)}
+  .ancho .nota{font-size:8pt;color:var(--gris);margin-bottom:10px}
+  .ancho svg{display:block;width:100%;height:300px;overflow:visible}
+  .leyenda{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:8.5pt;color:var(--gris)}
+  .leyenda i{display:inline-block;width:14px;height:3px;border-radius:2px;
+             vertical-align:middle;margin-right:5px}
+
+  .tablabox{overflow-x:auto;margin-top:8px;max-height:460px;overflow-y:auto}
+  table{border-collapse:collapse;font-size:8.5pt;white-space:nowrap;min-width:100%}
+  th,td{padding:5px 10px;border-bottom:1px solid var(--linea);text-align:right}
+  th:first-child,td:first-child{text-align:left;position:sticky;left:0;background:var(--panel)}
+  thead th{position:sticky;top:0;background:var(--panel);font-weight:bold;color:var(--azul);z-index:2}
+  td.sd{color:var(--gris)}
+  .acciones{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+  .acciones button{font:8.5pt Verdana,sans-serif;padding:7px 14px;border-radius:6px;
+         border:1px solid var(--azul);background:var(--azul);color:#fff;cursor:pointer}
+  .acciones button.sec{background:transparent;color:var(--azul)}
+
+  .aviso{background:var(--panel);border:1px solid var(--linea);border-left:4px solid #c98a00;
+         border-radius:8px;padding:11px 14px;font-size:8.5pt;color:var(--gris);margin-bottom:16px}
+  footer{margin-top:34px;font-size:8pt;color:var(--gris);line-height:1.7;
+         border-top:1px solid var(--linea);padding-top:14px}
+  .tip{position:fixed;pointer-events:none;background:var(--negro);color:var(--panel);
+       font:8pt Verdana,sans-serif;padding:6px 9px;border-radius:6px;opacity:0;
+       transition:opacity .1s;z-index:60;white-space:pre}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Panel macro Argentina</h1>
+    <div class="sub" id="sub"></div>
+  </header>
+
+  <div id="avisos"></div>
+
+  <div class="barra">
+    <div><label for="d1">Desde</label><input type="date" id="d1"></div>
+    <div><label for="d2">Hasta</label><input type="date" id="d2"></div>
+    <div class="rapidos" id="rapidos">
+      <button data-m="1">1 mes</button>
+      <button data-m="3">3 meses</button>
+      <button data-m="6">6 meses</button>
+      <button data-m="12">1 año</button>
+      <button data-m="60">5 años</button>
+      <button data-m="0">Todo</button>
+    </div>
+  </div>
+
+  <div id="contenido"></div>
+
+  <footer>
+    <b>Fuentes.</b> BCRA (dólar mayorista A3500, reservas internacionales, BADLAR, TAMAR, UVA, e IPC del INDEC republicado) ·
+    Banco Nación vía ArgentinaDatos (billete comprador y vendedor) ·
+    Cámara Arbitral de Cereales de la Bolsa de Comercio de Rosario (precios de pizarra) ·
+    Bitstamp y Coinbase (bitcoin).<br>
+    <b>Bandas cambiarias.</b> El BCRA no publica el piso y el techo como serie descargable: se calculan acá.
+    Desde el 14/04/2025 al 31/12/2025 el techo subía 1% mensual y el piso bajaba 1% mensual; desde el 02/01/2026
+    ambos se ajustan por el último IPC mensual conocido al inicio del mes. El cálculo fue contrastado contra los
+    valores publicados por el BCRA (24/08/2026: calculado 1.871,95 contra 1.871,95 publicado).
+    Los valores intermedios de 2025 son una reconstrucción calibrada, no una publicación oficial.<br>
+    <b>Datos faltantes.</b> Las celdas sin dato figuran como <i>s/d</i>. Nunca se completan con cero.
+    Los feriados y fines de semana no tienen cotización.
+  </footer>
+</div>
+<div class="tip" id="tip"></div>
+
+<script>
+const D = /*__DATOS__*/null;
+
+/* ------------------------------------------------ configuración del panel */
+const GRUPOS = [
+  { titulo:"Cambiario", series:[
+      {k:"Dolar A3500",          n:"Dólar mayorista A3500", u:"$", d:2},
+      {k:"Dolar BNA comprador",  n:"BNA billete comprador",  u:"$", d:2},
+      {k:"Dolar BNA vendedor",   n:"BNA billete vendedor",   u:"$", d:2},
+      {k:"Banda inferior",       n:"Banda inferior",         u:"$", d:2},
+      {k:"Banda superior",       n:"Banda superior",         u:"$", d:2},
+  ]},
+  { titulo:"Tasas de interés", series:[
+      {k:"Tasa BADLAR", n:"BADLAR bancos privados", u:"%", d:2},
+      {k:"Tasa TAMAR",  n:"TAMAR bancos privados",  u:"%", d:2},
+  ]},
+  { titulo:"Precios e indexación", series:[
+      {k:"IPC mensual",     n:"IPC mensual",        u:"%", d:1},
+      {k:"IPC interanual",  n:"IPC interanual",     u:"%", d:1},
+      {k:"UVA",             n:"UVA",                u:"$", d:2},
+  ]},
+  { titulo:"Reservas", series:[
+      {k:"Reservas internacionales", n:"Reservas internacionales", u:"US$ M", d:0},
+  ]},
+  { titulo:"Granos — pizarra Rosario", series:[
+      {k:"Soja US$/t",    n:"Soja",    u:"US$/t", d:2},
+      {k:"Maiz US$/t",    n:"Maíz",    u:"US$/t", d:2},
+      {k:"Trigo US$/t",   n:"Trigo",   u:"US$/t", d:2},
+      {k:"Girasol US$/t", n:"Girasol", u:"US$/t", d:2},
+      {k:"Sorgo US$/t",   n:"Sorgo",   u:"US$/t", d:2},
+      {k:"Soja $/t",      n:"Soja",    u:"$/t", d:0},
+      {k:"Maiz $/t",      n:"Maíz",    u:"$/t", d:0},
+      {k:"Trigo $/t",     n:"Trigo",   u:"$/t", d:0},
+      {k:"Girasol $/t",   n:"Girasol", u:"$/t", d:0},
+      {k:"Sorgo $/t",     n:"Sorgo",   u:"$/t", d:0},
+  ]},
+  { titulo:"Cripto", series:[
+      {k:"Bitcoin USD", n:"Bitcoin", u:"US$", d:0},
+  ]},
+];
+
+const COLORES = ["#1F4E79","#c98a00","#1b7a4b","#b3261e","#6b4fa0","#0f7d8c"];
+
+/* ------------------------------------------------ utilidades */
+const fechas = D.fechas.map(s => s);
+const idx = new Map(fechas.map((f,i)=>[f,i]));
+
+function fmt(v, d, u){
+  if(v===null||v===undefined||Number.isNaN(v)) return "s/d";
+  const s = Math.abs(v).toLocaleString("es-AR",{minimumFractionDigits:d,maximumFractionDigits:d});
+  const txt = v<0 ? "("+s+")" : s;
+  if(u==="%") return txt+" %";
+  if(u==="$") return "$ "+txt;
+  if(u==="US$") return "US$ "+txt;
+  if(u==="US$ M") return "US$ "+txt+" M";
+  if(u==="$/t") return "$ "+txt;
+  if(u==="US$/t") return "US$ "+txt;
+  return txt;
+}
+function fmtFecha(iso){ const p=iso.split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
+
+function rango(){
+  let a = document.getElementById("d1").value || fechas[0];
+  let b = document.getElementById("d2").value || fechas[fechas.length-1];
+  if(a>b){ const t=a; a=b; b=t; }
+  const i0 = fechas.findIndex(f=>f>=a);
+  let i1 = -1; for(let i=fechas.length-1;i>=0;i--){ if(fechas[i]<=b){ i1=i; break; } }
+  return [i0<0?0:i0, i1<0?fechas.length-1:i1];
+}
+
+function tramo(k, i0, i1){
+  const v = D.series[k]; if(!v) return [];
+  const out=[];
+  for(let i=i0;i<=i1;i++){ if(v[i]!==null&&v[i]!==undefined) out.push([i, v[i]]); }
+  return out;
+}
+
+/* ------------------------------------------------ gráficos SVG */
+function ejeY(min,max,n){
+  if(min===max){ min-=1; max+=1; }
+  const paso = Math.pow(10, Math.floor(Math.log10((max-min)/n)));
+  const cand=[1,2,2.5,5,10].map(m=>m*paso);
+  const p = cand.find(c=>(max-min)/c<=n) || cand[cand.length-1];
+  const lo=Math.floor(min/p)*p, hi=Math.ceil(max/p)*p;
+  const t=[]; for(let v=lo; v<=hi+1e-9; v+=p) t.push(+v.toFixed(10));
+  return t;
+}
+
+function chispa(pts){
+  if(pts.length<2) return '<svg viewBox="0 0 300 64"></svg>';
+  const ys=pts.map(p=>p[1]);
+  const lo=Math.min(...ys), hi=Math.max(...ys), r=(hi-lo)||1;
+  const x0=pts[0][0], x1=pts[pts.length-1][0], rx=(x1-x0)||1;
+  const sube = ys[ys.length-1]>=ys[0];
+  const col = sube ? "var(--verde)" : "var(--rojo)";
+  const d = pts.map((p,i)=>(i?"L":"M")+(((p[0]-x0)/rx)*298+1).toFixed(2)+","+
+            (60-((p[1]-lo)/r)*56).toFixed(2)).join(" ");
+  return '<svg viewBox="0 0 300 64" preserveAspectRatio="none">'+
+         '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" '+
+         'vector-effect="non-scaling-stroke"/></svg>';
+}
+
+function grafico(lineas, alto){
+  const W=1000, H=alto||300, ML=64, MR=14, MT=12, MB=26;
+  const todos = lineas.flatMap(l=>l.pts);
+  if(todos.length<2) return '<svg viewBox="0 0 1000 '+H+'"><text x="14" y="30" '+
+        'font-size="13" fill="var(--gris)">Sin datos en el rango elegido</text></svg>';
+  const xs=todos.map(p=>p[0]), ys=todos.map(p=>p[1]);
+  const x0=Math.min(...xs), x1=Math.max(...xs);
+  const ticks=ejeY(Math.min(...ys),Math.max(...ys),5);
+  const lo=ticks[0], hi=ticks[ticks.length-1], r=(hi-lo)||1, rx=(x1-x0)||1;
+  const px=i=>ML+((i-x0)/rx)*(W-ML-MR);
+  const py=v=>MT+(1-(v-lo)/r)*(H-MT-MB);
+
+  let s='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">';
+  ticks.forEach(t=>{
+    s+='<line x1="'+ML+'" x2="'+(W-MR)+'" y1="'+py(t).toFixed(1)+'" y2="'+py(t).toFixed(1)+
+       '" stroke="var(--linea)" stroke-width="1" vector-effect="non-scaling-stroke"/>'+
+       '<text x="'+(ML-8)+'" y="'+(py(t)+4).toFixed(1)+'" text-anchor="end" font-size="11" '+
+       'fill="var(--gris)" font-family="Verdana,sans-serif">'+
+       t.toLocaleString("es-AR",{maximumFractionDigits:2})+'</text>';
+  });
+  [x0, Math.round((x0+x1)/2), x1].forEach((i,n)=>{
+    s+='<text x="'+px(i).toFixed(1)+'" y="'+(H-8)+'" font-size="11" fill="var(--gris)" '+
+       'font-family="Verdana,sans-serif" text-anchor="'+(n===0?"start":n===2?"end":"middle")+'">'+
+       fmtFecha(fechas[i])+'</text>';
+  });
+  lineas.forEach((l,n)=>{
+    if(l.pts.length<2) return;
+    const d=l.pts.map((p,i)=>(i?"L":"M")+px(p[0]).toFixed(2)+","+py(p[1]).toFixed(2)).join(" ");
+    s+='<path d="'+d+'" fill="none" stroke="'+(l.color||COLORES[n%COLORES.length])+'" '+
+       'stroke-width="'+(l.dash?1.4:1.9)+'"'+(l.dash?' stroke-dasharray="5 4"':'')+
+       ' vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
+  });
+  return s+'</svg>';
+}
+
+/* ------------------------------------------------ render */
+function tarjeta(cfg, i0, i1){
+  const pts = tramo(cfg.k, i0, i1);
+  if(!pts.length) return "";
+  const ult = pts[pts.length-1], pri = pts[0];
+  let varTxt='<span class="flat">sin variación en el rango</span>';
+  if(pts.length>1 && pri[1]!==0){
+    const pc=(ult[1]/pri[1]-1)*100;
+    const cls = Math.abs(pc)<0.05?"flat":(pc>0?"up":"down");
+    const sig = pc>0?"+":"";
+    varTxt='<span class="'+cls+'">'+sig+pc.toLocaleString("es-AR",{minimumFractionDigits:1,
+           maximumFractionDigits:1})+' % en el rango</span>';
+  }
+  return '<div class="card"><div class="nom">'+cfg.n+
+    (cfg.u==="$/t"||cfg.u==="US$/t"?' <span style="opacity:.7">('+cfg.u+')</span>':'')+'</div>'+
+    '<div class="val">'+fmt(ult[1],cfg.d,cfg.u)+'</div>'+
+    '<div class="var">'+varTxt+'</div>'+
+    chispa(pts)+
+    '<div class="pie">'+pts.length+' datos · último '+fmtFecha(fechas[ult[0]])+'</div></div>';
+}
+
+function render(){
+  const [i0,i1]=rango();
+  let h="";
+
+  /* gráfico principal: dólar contra las bandas */
+  const l1=[
+    {nom:"Dólar mayorista A3500", pts:tramo("Dolar A3500",i0,i1), color:"#1F4E79"},
+    {nom:"BNA vendedor",          pts:tramo("Dolar BNA vendedor",i0,i1), color:"#6b4fa0"},
+    {nom:"Banda superior",        pts:tramo("Banda superior",i0,i1), color:"#b3261e", dash:1},
+    {nom:"Banda inferior",        pts:tramo("Banda inferior",i0,i1), color:"#1b7a4b", dash:1},
+  ].filter(l=>l.pts.length);
+  h+='<div class="ancho"><h3>Dólar y bandas cambiarias</h3>'+
+     '<div class="nota">Las bandas son calculadas, no una serie publicada por el BCRA. '+
+     'Sólo existen desde el 14/04/2025.</div>'+grafico(l1)+
+     '<div class="leyenda">'+l1.map(l=>'<span><i style="background:'+l.color+
+     (l.dash?';opacity:.75':'')+'"></i>'+l.nom+'</span>').join("")+'</div></div>';
+
+  /* tarjetas por grupo */
+  GRUPOS.forEach(g=>{
+    const cards=g.series.map(s=>tarjeta(s,i0,i1)).filter(Boolean).join("");
+    if(cards) h+='<div class="seccion">'+g.titulo+'</div><div class="grid">'+cards+'</div>';
+  });
+
+  /* gráficos comparativos */
+  const l2=[
+    {nom:"BADLAR", pts:tramo("Tasa BADLAR",i0,i1)},
+    {nom:"TAMAR",  pts:tramo("Tasa TAMAR",i0,i1)},
+  ].filter(l=>l.pts.length);
+  if(l2.length) h+='<div class="seccion">Comparativos</div><div class="grid">'+
+    '<div class="ancho"><h3>Tasas de interés (% nominal anual)</h3><div class="nota"></div>'+
+    grafico(l2,240)+'<div class="leyenda">'+l2.map((l,n)=>'<span><i style="background:'+
+    COLORES[n%COLORES.length]+'"></i>'+l.nom+'</span>').join("")+'</div></div></div>';
+
+  const l3=["Soja","Maiz","Trigo","Girasol","Sorgo"].map((g,n)=>(
+    {nom:g==="Maiz"?"Maíz":g, pts:tramo(g+" US$/t",i0,i1)})).filter(l=>l.pts.length);
+  if(l3.length) h+='<div class="grid"><div class="ancho"><h3>Granos, pizarra Rosario (US$ por tonelada)</h3>'+
+    '<div class="nota">La Cámara Arbitral publica sólo el último día hábil: la serie se acumula '+
+    'desde que este panel empezó a correr.</div>'+grafico(l3,240)+'<div class="leyenda">'+
+    l3.map((l,n)=>'<span><i style="background:'+COLORES[n%COLORES.length]+'"></i>'+l.nom+
+    '</span>').join("")+'</div></div></div>';
+
+  /* tabla */
+  const cols=GRUPOS.flatMap(g=>g.series).filter(s=>D.series[s.k]);
+  let t='<table><thead><tr><th>Fecha</th>'+cols.map(c=>'<th>'+c.n+
+        (c.u==="$/t"||c.u==="US$/t"?" "+c.u:"")+'</th>').join("")+'</tr></thead><tbody>';
+  /* una fila = un dia con dato observado. Las bandas existen todos los dias del
+     calendario, incluidos sabados y domingos: por si solas no justifican una fila. */
+  const observadas = cols.map((c,n)=>({n, calc:c.k==="Banda inferior"||c.k==="Banda superior"}))
+                         .filter(o=>!o.calc).map(o=>o.n);
+  let filas=0;
+  for(let i=i1;i>=i0 && filas<400;i--){
+    const vals=cols.map(c=>D.series[c.k][i]);
+    if(observadas.every(n=>vals[n]===null||vals[n]===undefined)) continue;
+    filas++;
+    t+='<tr><td>'+fmtFecha(fechas[i])+'</td>'+cols.map((c,n)=>{
+      const v=vals[n];
+      return (v===null||v===undefined)?'<td class="sd">s/d</td>':'<td>'+fmt(v,c.d,"")+'</td>';
+    }).join("")+'</tr>';
+  }
+  t+='</tbody></table>';
+  h+='<div class="seccion">Tabla</div><div class="ancho">'+
+     '<div class="nota">Últimas '+filas+' fechas con dato dentro del rango. '+
+     '<b>s/d</b> = sin dato, no es cero.</div>'+
+     '<div class="tablabox">'+t+'</div>'+
+     '<div class="acciones"><button onclick="bajarCSV()">Descargar el rango en CSV</button>'+
+     '<button class="sec" onclick="window.print()">Imprimir o guardar en PDF</button></div></div>';
+
+  document.getElementById("contenido").innerHTML=h;
+}
+
+function bajarCSV(){
+  const [i0,i1]=rango();
+  const cols=GRUPOS.flatMap(g=>g.series).filter(s=>D.series[s.k]);
+  let csv="fecha;"+cols.map(c=>c.n+(c.u?" ("+c.u+")":"")).join(";")+"\n";
+  for(let i=i0;i<=i1;i++){
+    const vals=cols.map(c=>D.series[c.k][i]);
+    if(vals.every(v=>v===null||v===undefined)) continue;
+    csv+=fechas[i]+";"+vals.map(v=>(v===null||v===undefined)?"":
+         String(v).replace(".",",")).join(";")+"\n";
+  }
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(new Blob(["﻿"+csv],{type:"text/csv;charset=utf-8"}));
+  a.download="Panel macro "+fechas[i0]+" a "+fechas[i1]+".csv";
+  a.click();
+}
+
+/* ------------------------------------------------ arranque */
+document.getElementById("sub").textContent =
+  "Actualizado el "+D.actualizado+" · "+fechas.length.toLocaleString("es-AR")+
+  " fechas entre el "+fmtFecha(fechas[0])+" y el "+fmtFecha(fechas[fechas.length-1]);
+
+if(D.incidencias && D.incidencias.length){
+  document.getElementById("avisos").innerHTML='<div class="aviso"><b>Atención:</b> '+
+    'en la última actualización fallaron estas fuentes, así que sus datos pueden estar '+
+    'desactualizados: '+D.incidencias.map(i=>i.fuente).join(" · ")+'.</div>';
+}
+
+const d1=document.getElementById("d1"), d2=document.getElementById("d2");
+d1.min=d2.min=fechas[0]; d1.max=d2.max=fechas[fechas.length-1];
+d1.onchange=d2.onchange=()=>{ marcar(null); render(); };
+
+function marcar(btn){
+  document.querySelectorAll("#rapidos button").forEach(b=>b.setAttribute("aria-pressed", b===btn));
+}
+document.querySelectorAll("#rapidos button").forEach(b=>{
+  b.onclick=()=>{
+    const m=+b.dataset.m;
+    d2.value=fechas[fechas.length-1];
+    if(m===0){ d1.value=fechas[0]; }
+    else{ const f=new Date(d2.value); f.setMonth(f.getMonth()-m);
+          d1.value=f.toISOString().slice(0,10) < fechas[0] ? fechas[0] : f.toISOString().slice(0,10); }
+    marcar(b); render();
+  };
+});
+document.querySelector('#rapidos button[data-m="12"]').click();
+</script>
+</body>
+</html>
