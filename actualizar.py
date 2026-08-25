@@ -46,11 +46,14 @@ def avisar(fuente, detalle):
     )
 
 
-def pedir(url, intentos=4, espera=3, **kw):
+def pedir(url, intentos=4, espera=3, sesion=None, **kw):
+    cliente = sesion or requests
+    if sesion is None:
+        kw.setdefault("headers", UA)
     ultimo = None
     for n in range(intentos):
         try:
-            r = requests.get(url, headers=UA, timeout=45, **kw)
+            r = cliente.get(url, timeout=45, **kw)
             r.raise_for_status()
             return r
         except Exception as e:  # noqa: BLE001
@@ -258,50 +261,116 @@ BC_GRANOS = {
 }
 
 
-def bajar_pizarra_historico():
-    """Devuelve {'Soja $/t': Serie, ...} con la pizarra Rosario en pesos."""
+# El sitio rechaza con 403 a los clientes que se identifican como robots, asi que
+# hay que pedir como pediria un navegador: cabeceras completas y una visita previa
+# a la pagina para que el servidor abra la sesion.
+NAVEGADOR = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/csv,application/csv,text/plain,*/*;q=0.8",
+    "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
+    "Referer": "https://www.bolsadecereales.com/camara-arbitral",
+    "Upgrade-Insecure-Requests": "1",
+}
+
+
+def _leer_csv_bc(txt, puntos):
+    """Suma las filas de Rosario al acumulador. Devuelve cuantos ceros descarto."""
     import csv as _csv
 
-    puntos = {v: {} for v in BC_GRANOS.values()}
     ceros = 0
-    for anio in range(BC_INICIO.year, HOY.year + 1):
-        d0 = max(BC_INICIO, date(anio, 1, 1))
-        d1 = min(HOY, date(anio, 12, 31))
-        if d0 > d1:
+    rd = _csv.reader(io.StringIO(txt.lstrip("﻿")), delimiter=";")
+    next(rd, None)
+    for r in rd:
+        if len(r) < 4:
             continue
-        url = f"{BC_CSV}?reporte=camara&desde={d0.isoformat()}&hasta={d1.isoformat()}&puerto="
+        f_txt = r[0].strip()
+        cereal = r[1].strip().upper()
+        puerto = r[2].strip().upper()
+        pesos = r[3].strip()
+        if puerto != "ROSARIO" or cereal not in BC_GRANOS:
+            continue
         try:
-            txt = pedir(url).text
-        except Exception as e:  # noqa: BLE001
-            avisar(f"Pizarra historica {anio}", e)
+            v = float(pesos.replace(",", "."))
+        except ValueError:
             continue
-        rd = _csv.reader(io.StringIO(txt.lstrip("﻿")), delimiter=";")
-        next(rd, None)
-        for r in rd:
-            if len(r) < 4:
-                continue
-            f_txt, cereal, puerto, pesos = r[0].strip(), r[1].strip().upper(), r[2].strip().upper(), r[3].strip()
-            if puerto != "ROSARIO" or cereal not in BC_GRANOS:
-                continue
-            try:
-                v = float(pesos.replace(",", "."))
-            except ValueError:
-                continue
-            if v <= 0:  # sin cotizacion ese dia
-                ceros += 1
-                continue
-            try:
-                puntos[BC_GRANOS[cereal]][date.fromisoformat(f_txt)] = v
-            except ValueError:
-                continue
+        if v <= 0:  # sin cotizacion ese dia: no es un precio de cero
+            ceros += 1
+            continue
+        try:
+            puntos[BC_GRANOS[cereal]][date.fromisoformat(f_txt)] = v
+        except ValueError:
+            continue
+    return ceros
 
-    salida = {}
-    for g, d in puntos.items():
-        if d:
-            salida[f"{g} $/t"] = pd.Series(d).sort_index()
-    if not salida:
-        raise RuntimeError("sin datos")
-    print(f"  ({ceros} celdas sin cotizacion descartadas, no se cuentan como cero)")
+
+def bajar_pizarra_historico():
+    """
+    Devuelve {'Soja $/t': Serie, ...} con la pizarra Rosario en pesos.
+
+    Lo bajado se guarda en datos/granos_historico.csv. En la primera corrida se
+    piden los ~24 anios completos; despues solo se vuelve a pedir el ultimo tramo.
+    Si el sitio falla, se sigue trabajando con lo que ya estaba guardado.
+    """
+    cache = DATOS / "granos_historico.csv"
+    puntos = {v: {} for v in BC_GRANOS.values()}
+
+    guardado = 0
+    if cache.exists():
+        prev = pd.read_csv(cache)
+        for _, r in prev.iterrows():
+            g = str(r["grano"])
+            if g in puntos:
+                puntos[g][date.fromisoformat(str(r["fecha"]))] = float(r["pesos"])
+                guardado += 1
+        print(f"  cache de pizarra: {guardado} valores ya guardados")
+
+    ultima = max((max(d) for d in puntos.values() if d), default=None)
+    desde = max(BC_INICIO, ultima - timedelta(days=15)) if ultima else BC_INICIO
+
+    ses = requests.Session()
+    ses.headers.update(NAVEGADOR)
+    try:  # visita previa: algunos sitios exigen la cookie de sesion
+        ses.get("https://www.bolsadecereales.com/camara-arbitral", timeout=45)
+    except Exception as e:  # noqa: BLE001
+        print(f"  no se pudo abrir sesion en la Bolsa de Cereales: {e}")
+
+    ceros, fallos, anio = 0, 0, desde.year
+    while anio <= HOY.year:
+        hasta_anio = min(anio + 3, HOY.year)  # tramos de 4 anios
+        d0 = max(desde, date(anio, 1, 1))
+        d1 = min(HOY, date(hasta_anio, 12, 31))
+        if d0 <= d1:
+            url = (
+                f"{BC_CSV}?reporte=camara&desde={d0.isoformat()}"
+                f"&hasta={d1.isoformat()}&puerto="
+            )
+            try:
+                r = pedir(url, intentos=3, sesion=ses)
+                ceros += _leer_csv_bc(r.text, puntos)
+            except Exception as e:  # noqa: BLE001
+                fallos += 1
+                avisar(f"Pizarra historica {d0.year}-{d1.year}", e)
+        anio = hasta_anio + 1
+
+    if not any(puntos.values()):
+        raise RuntimeError("sin datos y sin cache")
+
+    # se reescribe el cache con todo lo que hay
+    filas = [
+        {"fecha": f.isoformat(), "grano": g, "pesos": v}
+        for g, d in puntos.items()
+        for f, v in d.items()
+    ]
+    pd.DataFrame(filas).sort_values(["fecha", "grano"]).to_csv(cache, index=False)
+
+    salida = {f"{g} $/t": pd.Series(d).sort_index() for g, d in puntos.items() if d}
+    print(
+        f"  pizarra historica: {len(filas)} valores, {ceros} celdas sin cotizacion "
+        f"descartadas, {fallos} tramo(s) fallado(s)"
+    )
     return salida
 
 
