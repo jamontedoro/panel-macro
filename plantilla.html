@@ -24,7 +24,7 @@
 
   .barra{background:var(--panel);border:1px solid var(--linea);border-radius:10px;
          padding:12px 14px;display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;
-         margin-bottom:18px;position:sticky;top:0;z-index:20}
+         margin-bottom:18px;position:sticky;top:0;z-index:30}
   .barra label{font-size:8.5pt;color:var(--gris);margin-right:6px}
   .barra input[type=date]{font:9pt Verdana,sans-serif;padding:5px 8px;border-radius:6px;
          border:1px solid var(--linea);background:var(--panel);color:var(--negro)}
@@ -45,13 +45,34 @@
   .card svg{display:block;width:100%;height:64px;margin-top:8px;overflow:visible}
 
   .ancho{grid-column:1/-1;background:var(--panel);border:1px solid var(--linea);
-         border-radius:10px;padding:16px}
+         border-radius:10px;padding:16px;margin-bottom:14px}
   .ancho h3{margin:0 0 2px;font-size:11pt;color:var(--azul)}
   .ancho .nota{font-size:8pt;color:var(--gris);margin-bottom:10px}
-  .ancho svg{display:block;width:100%;height:300px;overflow:visible}
+  .chartbox{position:relative}
+  .chartbox svg{display:block;width:100%;height:320px;overflow:visible}
+  .chartbox.chico svg{height:240px}
+  .cursor{position:absolute;top:0;bottom:26px;width:1px;background:var(--gris);
+          opacity:0;pointer-events:none}
   .leyenda{display:flex;flex-wrap:wrap;gap:14px;margin-top:8px;font-size:8.5pt;color:var(--gris)}
   .leyenda i{display:inline-block;width:14px;height:3px;border-radius:2px;
              vertical-align:middle;margin-right:5px}
+
+  /* selector de series */
+  .picker{border:1px solid var(--linea);border-radius:8px;padding:10px 12px;margin-bottom:12px}
+  .pfila{display:flex;flex-wrap:wrap;gap:6px;align-items:baseline;margin:6px 0}
+  .plabel{font-size:7.5pt;color:var(--gris);text-transform:uppercase;letter-spacing:.4px;
+          min-width:108px;flex-shrink:0}
+  .chip{font:8.5pt Verdana,sans-serif;padding:4px 10px;border-radius:13px;cursor:pointer;
+        border:1px solid var(--linea);background:transparent;color:var(--gris);white-space:nowrap}
+  .chip:hover{border-color:var(--azul);color:var(--azul)}
+  .chip[aria-pressed=true]{color:#fff;border-color:transparent}
+  .pacciones{display:flex;flex-wrap:wrap;gap:14px;align-items:center;margin-top:10px;
+             padding-top:10px;border-top:1px solid var(--linea);font-size:8.5pt;color:var(--gris)}
+  .pacciones button{font:8.5pt Verdana,sans-serif;padding:4px 10px;border-radius:6px;
+        border:1px solid var(--linea);background:transparent;color:var(--gris);cursor:pointer}
+  .pacciones button:hover{border-color:var(--azul);color:var(--azul)}
+  .pacciones label{cursor:pointer;display:inline-flex;align-items:center;gap:5px}
+  .aclara{font-size:8pt;color:var(--gris);margin-top:8px}
 
   .tablabox{overflow-x:auto;margin-top:8px;max-height:460px;overflow-y:auto}
   table{border-collapse:collapse;font-size:8.5pt;white-space:nowrap;min-width:100%}
@@ -68,9 +89,14 @@
          border-radius:8px;padding:11px 14px;font-size:8.5pt;color:var(--gris);margin-bottom:16px}
   footer{margin-top:34px;font-size:8pt;color:var(--gris);line-height:1.7;
          border-top:1px solid var(--linea);padding-top:14px}
-  .tip{position:fixed;pointer-events:none;background:var(--negro);color:var(--panel);
-       font:8pt Verdana,sans-serif;padding:6px 9px;border-radius:6px;opacity:0;
-       transition:opacity .1s;z-index:60;white-space:pre}
+  .tip{position:fixed;pointer-events:none;background:var(--panel);color:var(--negro);
+       border:1px solid var(--linea);box-shadow:0 4px 14px rgba(0,0,0,.18);
+       font:8.5pt Verdana,sans-serif;padding:8px 10px;border-radius:7px;opacity:0;
+       transition:opacity .08s;z-index:60;white-space:nowrap}
+  .tip b{display:block;margin-bottom:4px;color:var(--azul)}
+  .tip span{display:block}
+  .tip i{display:inline-block;width:9px;height:3px;border-radius:2px;
+         vertical-align:middle;margin-right:6px}
 </style>
 </head>
 <body>
@@ -116,20 +142,21 @@
 <script>
 const D = /*__DATOS__*/null;
 
-/* ------------------------------------------------ configuración del panel */
+/* ------------------------------------------------ configuración */
 const GRUPOS = [
   { titulo:"Cambiario", series:[
       {k:"Dolar A3500",          n:"Dólar mayorista A3500", u:"$", d:2},
       {k:"Dolar BNA comprador",  n:"BNA billete comprador",  u:"$", d:2},
       {k:"Dolar BNA vendedor",   n:"BNA billete vendedor",   u:"$", d:2},
+      {k:"Dolar BNA divisa comprador", n:"BNA divisa comprador", u:"$", d:2},
       {k:"Banda inferior",       n:"Banda inferior",         u:"$", d:2},
       {k:"Banda superior",       n:"Banda superior",         u:"$", d:2},
   ]},
-  { titulo:"Tasas de interés", series:[
+  { titulo:"Tasas", series:[
       {k:"Tasa BADLAR", n:"BADLAR bancos privados", u:"%", d:2},
       {k:"Tasa TAMAR",  n:"TAMAR bancos privados",  u:"%", d:2},
   ]},
-  { titulo:"Precios e indexación", series:[
+  { titulo:"Precios", series:[
       {k:"IPC mensual",     n:"IPC mensual",        u:"%", d:1},
       {k:"IPC interanual",  n:"IPC interanual",     u:"%", d:1},
       {k:"UVA",             n:"UVA",                u:"$", d:2},
@@ -137,12 +164,14 @@ const GRUPOS = [
   { titulo:"Reservas", series:[
       {k:"Reservas internacionales", n:"Reservas internacionales", u:"US$ M", d:0},
   ]},
-  { titulo:"Granos — pizarra Rosario", series:[
+  { titulo:"Granos US$", series:[
       {k:"Soja US$/t",    n:"Soja",    u:"US$/t", d:2},
       {k:"Maiz US$/t",    n:"Maíz",    u:"US$/t", d:2},
       {k:"Trigo US$/t",   n:"Trigo",   u:"US$/t", d:2},
       {k:"Girasol US$/t", n:"Girasol", u:"US$/t", d:2},
       {k:"Sorgo US$/t",   n:"Sorgo",   u:"US$/t", d:2},
+  ]},
+  { titulo:"Granos $", series:[
       {k:"Soja $/t",      n:"Soja",    u:"$/t", d:0},
       {k:"Maiz $/t",      n:"Maíz",    u:"$/t", d:0},
       {k:"Trigo $/t",     n:"Trigo",   u:"$/t", d:0},
@@ -154,25 +183,36 @@ const GRUPOS = [
   ]},
 ];
 
-const COLORES = ["#1F4E79","#c98a00","#1b7a4b","#b3261e","#6b4fa0","#0f7d8c"];
+const PALETA = ["#1F4E79","#c98a00","#1b7a4b","#b3261e","#6b4fa0","#0f7d8c",
+                "#a34d9c","#4c6ef5","#8a6d3b","#2f9e44","#e8590c","#087f5b"];
+
+/* series que existen realmente en los datos */
+const TODAS = [];
+GRUPOS.forEach(g => g.series.forEach(s => {
+  if (D.series[s.k]) TODAS.push(Object.assign({grupo:g.titulo}, s));
+}));
+const POR_K = new Map(TODAS.map(s => [s.k, s]));
+
+/* selección inicial y estado */
+let sel = ["Dolar A3500","Banda superior","Banda inferior"].filter(k => POR_K.has(k));
+if (!sel.length) sel = TODAS.slice(0,3).map(s => s.k);
+let forzarBase100 = false;
+
+const fechas = D.fechas;
 
 /* ------------------------------------------------ utilidades */
-const fechas = D.fechas.map(s => s);
-const idx = new Map(fechas.map((f,i)=>[f,i]));
-
 function fmt(v, d, u){
   if(v===null||v===undefined||Number.isNaN(v)) return "s/d";
   const s = Math.abs(v).toLocaleString("es-AR",{minimumFractionDigits:d,maximumFractionDigits:d});
   const txt = v<0 ? "("+s+")" : s;
   if(u==="%") return txt+" %";
-  if(u==="$") return "$ "+txt;
-  if(u==="US$") return "US$ "+txt;
+  if(u==="$"||u==="$/t") return "$ "+txt;
+  if(u==="US$"||u==="US$/t") return "US$ "+txt;
   if(u==="US$ M") return "US$ "+txt+" M";
-  if(u==="$/t") return "$ "+txt;
-  if(u==="US$/t") return "US$ "+txt;
   return txt;
 }
 function fmtFecha(iso){ const p=iso.split("-"); return p[2]+"/"+p[1]+"/"+p[0]; }
+function esc(t){ return String(t).replace(/&/g,"&amp;").replace(/</g,"&lt;"); }
 
 function rango(){
   let a = document.getElementById("d1").value || fechas[0];
@@ -190,9 +230,8 @@ function tramo(k, i0, i1){
   return out;
 }
 
-/* ------------------------------------------------ gráficos SVG */
 function ejeY(min,max,n){
-  if(min===max){ min-=1; max+=1; }
+  if(min===max){ min-=Math.abs(min)*0.05||1; max+=Math.abs(max)*0.05||1; }
   const paso = Math.pow(10, Math.floor(Math.log10((max-min)/n)));
   const cand=[1,2,2.5,5,10].map(m=>m*paso);
   const p = cand.find(c=>(max-min)/c<=n) || cand[cand.length-1];
@@ -201,56 +240,128 @@ function ejeY(min,max,n){
   return t;
 }
 
-function chispa(pts){
-  if(pts.length<2) return '<svg viewBox="0 0 300 64"></svg>';
-  const ys=pts.map(p=>p[1]);
-  const lo=Math.min(...ys), hi=Math.max(...ys), r=(hi-lo)||1;
-  const x0=pts[0][0], x1=pts[pts.length-1][0], rx=(x1-x0)||1;
-  const sube = ys[ys.length-1]>=ys[0];
-  const col = sube ? "var(--verde)" : "var(--rojo)";
-  const d = pts.map((p,i)=>(i?"L":"M")+(((p[0]-x0)/rx)*298+1).toFixed(2)+","+
-            (60-((p[1]-lo)/r)*56).toFixed(2)).join(" ");
-  return '<svg viewBox="0 0 300 64" preserveAspectRatio="none">'+
-         '<path d="'+d+'" fill="none" stroke="'+col+'" stroke-width="1.6" '+
-         'vector-effect="non-scaling-stroke"/></svg>';
-}
+/* ------------------------------------------------ gráfico multi-serie */
+/*
+   lineas: [{k, nom, u, d, pts, color}]
+   Cada unidad distinta es una escala. Con una o dos escalas se dibujan los
+   valores reales (eje izquierdo y eje derecho). Con tres o mas no hay forma
+   honesta de compartir ejes, asi que se pasa a base 100.
+*/
+function graficoMulti(lineas, id, alto){
+  const W=1000, H=alto||320, ML=68, MR=68, MT=14, MB=26;
+  const vivas = lineas.filter(l => l.pts.length);
+  if(!vivas.length)
+    return {svg:'<svg viewBox="0 0 1000 '+H+'"><text x="14" y="34" font-size="13" '+
+      'fill="var(--gris)" font-family="Verdana,sans-serif">Elegí al menos una serie '+
+      'con datos en este rango.</text></svg>', modo:"vacio", puntos:[]};
 
-function grafico(lineas, alto){
-  const W=1000, H=alto||300, ML=64, MR=14, MT=12, MB=26;
-  const todos = lineas.flatMap(l=>l.pts);
-  if(todos.length<2) return '<svg viewBox="0 0 1000 '+H+'"><text x="14" y="30" '+
-        'font-size="13" fill="var(--gris)">Sin datos en el rango elegido</text></svg>';
-  const xs=todos.map(p=>p[0]), ys=todos.map(p=>p[1]);
-  const x0=Math.min(...xs), x1=Math.max(...xs);
-  const ticks=ejeY(Math.min(...ys),Math.max(...ys),5);
-  const lo=ticks[0], hi=ticks[ticks.length-1], r=(hi-lo)||1, rx=(x1-x0)||1;
-  const px=i=>ML+((i-x0)/rx)*(W-ML-MR);
-  const py=v=>MT+(1-(v-lo)/r)*(H-MT-MB);
+  const unidades = [...new Set(vivas.map(l=>l.u))];
+  const base100 = forzarBase100 || unidades.length > 2;
+
+  // datos a graficar (transformados si va base 100)
+  const series = vivas.map(l => {
+    if(!base100) return Object.assign({}, l, {gpts:l.pts, eje:unidades.indexOf(l.u)});
+    const b = l.pts[0][1];
+    return Object.assign({}, l, {
+      gpts: b ? l.pts.map(p=>[p[0], p[1]/b*100]) : l.pts.map(p=>[p[0],100]),
+      eje: 0, base: b
+    });
+  });
+
+  const xs = series.flatMap(l=>l.gpts.map(p=>p[0]));
+  const x0=Math.min(...xs), x1=Math.max(...xs), rx=(x1-x0)||1;
+  const px = i => ML+((i-x0)/rx)*(W-ML-MR);
+
+  // escalas por eje
+  const ejes = [];
+  for(let e=0; e<(base100?1:unidades.length); e++){
+    const ys = series.filter(l=>l.eje===e).flatMap(l=>l.gpts.map(p=>p[1]));
+    const t = ejeY(Math.min(...ys), Math.max(...ys), 5);
+    ejes.push({ticks:t, lo:t[0], hi:t[t.length-1], r:(t[t.length-1]-t[0])||1});
+  }
+  const py = (v,e) => MT+(1-(v-ejes[e].lo)/ejes[e].r)*(H-MT-MB);
 
   let s='<svg viewBox="0 0 '+W+' '+H+'" preserveAspectRatio="none">';
-  ticks.forEach(t=>{
-    s+='<line x1="'+ML+'" x2="'+(W-MR)+'" y1="'+py(t).toFixed(1)+'" y2="'+py(t).toFixed(1)+
+  // grilla y eje izquierdo
+  ejes[0].ticks.forEach(t=>{
+    const y=py(t,0);
+    s+='<line x1="'+ML+'" x2="'+(W-MR)+'" y1="'+y.toFixed(1)+'" y2="'+y.toFixed(1)+
        '" stroke="var(--linea)" stroke-width="1" vector-effect="non-scaling-stroke"/>'+
-       '<text x="'+(ML-8)+'" y="'+(py(t)+4).toFixed(1)+'" text-anchor="end" font-size="11" '+
+       '<text x="'+(ML-8)+'" y="'+(y+4).toFixed(1)+'" text-anchor="end" font-size="11" '+
        'fill="var(--gris)" font-family="Verdana,sans-serif">'+
        t.toLocaleString("es-AR",{maximumFractionDigits:2})+'</text>';
   });
+  // eje derecho
+  if(ejes.length>1){
+    ejes[1].ticks.forEach(t=>{
+      const y=py(t,1);
+      s+='<text x="'+(W-MR+8)+'" y="'+(y+4).toFixed(1)+'" font-size="11" '+
+         'fill="var(--gris)" font-family="Verdana,sans-serif">'+
+         t.toLocaleString("es-AR",{maximumFractionDigits:2})+'</text>';
+    });
+  }
+  // fechas
   [x0, Math.round((x0+x1)/2), x1].forEach((i,n)=>{
     s+='<text x="'+px(i).toFixed(1)+'" y="'+(H-8)+'" font-size="11" fill="var(--gris)" '+
        'font-family="Verdana,sans-serif" text-anchor="'+(n===0?"start":n===2?"end":"middle")+'">'+
        fmtFecha(fechas[i])+'</text>';
   });
-  lineas.forEach((l,n)=>{
-    if(l.pts.length<2) return;
-    const d=l.pts.map((p,i)=>(i?"L":"M")+px(p[0]).toFixed(2)+","+py(p[1]).toFixed(2)).join(" ");
-    s+='<path d="'+d+'" fill="none" stroke="'+(l.color||COLORES[n%COLORES.length])+'" '+
-       'stroke-width="'+(l.dash?1.4:1.9)+'"'+(l.dash?' stroke-dasharray="5 4"':'')+
+  // lineas
+  series.forEach(l=>{
+    if(l.gpts.length<2){
+      s+='<circle cx="'+px(l.gpts[0][0]).toFixed(2)+'" cy="'+py(l.gpts[0][1],l.eje).toFixed(2)+
+         '" r="3" fill="'+l.color+'"/>';
+      return;
+    }
+    const d=l.gpts.map((p,i)=>(i?"L":"M")+px(p[0]).toFixed(2)+","+py(p[1],l.eje).toFixed(2)).join(" ");
+    s+='<path d="'+d+'" fill="none" stroke="'+l.color+'" stroke-width="'+(l.punteada?1.5:1.9)+'"'+
+       (l.punteada?' stroke-dasharray="5 4"':'')+
        ' vector-effect="non-scaling-stroke" stroke-linejoin="round"/>';
   });
-  return s+'</svg>';
+  s+='</svg>';
+
+  return {svg:s, modo: base100?"base100":(ejes.length>1?"dos ejes":"un eje"),
+          unidades, series, px, x0, x1, ML, MR, W};
 }
 
-/* ------------------------------------------------ render */
+function leyenda(lineas, base100){
+  return '<div class="leyenda">'+lineas.filter(l=>l.pts.length).map(l=>
+    '<span><i style="background:'+l.color+(l.punteada?';opacity:.75':'')+'"></i>'+esc(l.nom)+
+    (base100?'':' <span style="opacity:.7">('+esc(l.u)+')</span>')+'</span>').join("")+'</div>';
+}
+
+/* ------------------------------------------------ selector */
+function pintarPicker(){
+  let h='<div class="picker">';
+  GRUPOS.forEach(g=>{
+    const ss=g.series.filter(s=>POR_K.has(s.k));
+    if(!ss.length) return;
+    h+='<div class="pfila"><span class="plabel">'+esc(g.titulo)+'</span>';
+    ss.forEach(s=>{
+      const on=sel.indexOf(s.k)>=0;
+      const col=on?PALETA[sel.indexOf(s.k)%PALETA.length]:"";
+      h+='<button class="chip" data-k="'+esc(s.k)+'" aria-pressed="'+on+'"'+
+         (on?' style="background:'+col+'"':'')+'>'+esc(s.n)+'</button>';
+    });
+    h+='</div>';
+  });
+  h+='<div class="pacciones">'+
+     '<button data-accion="ninguna">Ninguna</button>'+
+     '<button data-accion="cambiario">Dólar y bandas</button>'+
+     '<button data-accion="tasas">Dólar y tasas</button>'+
+     '<label><input type="checkbox" id="chk100"'+(forzarBase100?" checked":"")+
+     '> Comparar en base 100</label>'+
+     '<span id="modo"></span></div></div>';
+  return h;
+}
+
+const PRESETS = {
+  ninguna:    [],
+  cambiario:  ["Dolar A3500","Dolar BNA vendedor","Banda superior","Banda inferior"],
+  tasas:      ["Dolar A3500","Tasa TAMAR","Tasa BADLAR"],
+};
+
+/* ------------------------------------------------ tarjetas */
 function tarjeta(cfg, i0, i1){
   const pts = tramo(cfg.k, i0, i1);
   if(!pts.length) return "";
@@ -259,71 +370,85 @@ function tarjeta(cfg, i0, i1){
   if(pts.length>1 && pri[1]!==0){
     const pc=(ult[1]/pri[1]-1)*100;
     const cls = Math.abs(pc)<0.05?"flat":(pc>0?"up":"down");
-    const sig = pc>0?"+":"";
-    varTxt='<span class="'+cls+'">'+sig+pc.toLocaleString("es-AR",{minimumFractionDigits:1,
-           maximumFractionDigits:1})+' % en el rango</span>';
+    varTxt='<span class="'+cls+'">'+(pc>0?"+":"")+pc.toLocaleString("es-AR",
+           {minimumFractionDigits:1,maximumFractionDigits:1})+' % en el rango</span>';
   }
-  return '<div class="card"><div class="nom">'+cfg.n+
+  const ys=pts.map(p=>p[1]);
+  let chispa='<svg viewBox="0 0 300 64"></svg>';
+  if(pts.length>1){
+    const lo=Math.min(...ys), hi=Math.max(...ys), r=(hi-lo)||1;
+    const a=pts[0][0], b=pts[pts.length-1][0], rr=(b-a)||1;
+    const col = ys[ys.length-1]>=ys[0] ? "var(--verde)" : "var(--rojo)";
+    const d = pts.map((p,i)=>(i?"L":"M")+(((p[0]-a)/rr)*298+1).toFixed(2)+","+
+              (60-((p[1]-lo)/r)*56).toFixed(2)).join(" ");
+    chispa='<svg viewBox="0 0 300 64" preserveAspectRatio="none"><path d="'+d+
+           '" fill="none" stroke="'+col+'" stroke-width="1.6" vector-effect="non-scaling-stroke"/></svg>';
+  }
+  return '<div class="card"><div class="nom">'+esc(cfg.n)+
     (cfg.u==="$/t"||cfg.u==="US$/t"?' <span style="opacity:.7">('+cfg.u+')</span>':'')+'</div>'+
     '<div class="val">'+fmt(ult[1],cfg.d,cfg.u)+'</div>'+
-    '<div class="var">'+varTxt+'</div>'+
-    chispa(pts)+
+    '<div class="var">'+varTxt+'</div>'+chispa+
     '<div class="pie">'+pts.length+' datos · último '+fmtFecha(fechas[ult[0]])+'</div></div>';
 }
+
+/* ------------------------------------------------ render */
+let ultimoGrafico = null;
 
 function render(){
   const [i0,i1]=rango();
   let h="";
 
-  /* gráfico principal: dólar contra las bandas */
-  const l1=[
-    {nom:"Dólar mayorista A3500", pts:tramo("Dolar A3500",i0,i1), color:"#1F4E79"},
-    {nom:"BNA vendedor",          pts:tramo("Dolar BNA vendedor",i0,i1), color:"#6b4fa0"},
-    {nom:"Banda superior",        pts:tramo("Banda superior",i0,i1), color:"#b3261e", dash:1},
-    {nom:"Banda inferior",        pts:tramo("Banda inferior",i0,i1), color:"#1b7a4b", dash:1},
-  ].filter(l=>l.pts.length);
-  h+='<div class="ancho"><h3>Dólar y bandas cambiarias</h3>'+
-     '<div class="nota">Las bandas son calculadas, no una serie publicada por el BCRA. '+
-     'Sólo existen desde el 14/04/2025.</div>'+grafico(l1)+
-     '<div class="leyenda">'+l1.map(l=>'<span><i style="background:'+l.color+
-     (l.dash?';opacity:.75':'')+'"></i>'+l.nom+'</span>').join("")+'</div></div>';
+  /* --- comparador --- */
+  const lineas = sel.map((k,n)=>{
+    const s = POR_K.get(k); if(!s) return null;
+    // "Soja" o "Trigo" solos son ambiguos fuera de su grupo: se les agrega la unidad
+    const nom = (s.grupo.indexOf("Granos")===0) ? s.n+" ("+s.u+")" : s.n;
+    return Object.assign({}, s, {nom, pts:tramo(k,i0,i1), color:PALETA[n%PALETA.length],
+                                 punteada: k.indexOf("Banda")===0});
+  }).filter(Boolean);
 
-  /* tarjetas por grupo */
-  GRUPOS.forEach(g=>{
-    const cards=g.series.map(s=>tarjeta(s,i0,i1)).filter(Boolean).join("");
-    if(cards) h+='<div class="seccion">'+g.titulo+'</div><div class="grid">'+cards+'</div>';
+  const g = graficoMulti(lineas, "g-comp");
+  ultimoGrafico = g;
+
+  let aclara="";
+  if(g.modo==="base100")
+    aclara='<div class="aclara">Se muestra en <b>base 100</b>'+
+      (forzarBase100?'':' porque mezclaste '+g.unidades.length+' unidades distintas ('+
+       g.unidades.map(esc).join(", ")+') y no se pueden comparar en un mismo eje')+
+      '. Cada serie vale 100 en su primer dato dentro del rango, así que lo que ves es '+
+      'cuánto se movió cada una, no su nivel. Ojo con las series que empiezan más tarde '+
+      'que el resto: arrancan en 100 recién ahí.</div>';
+  else if(g.modo==="dos ejes")
+    aclara='<div class="aclara">Valores reales. Eje izquierdo en <b>'+esc(g.unidades[0])+
+      '</b>, eje derecho en <b>'+esc(g.unidades[1])+'</b>.</div>';
+  else if(g.modo==="un eje")
+    aclara='<div class="aclara">Valores reales en <b>'+esc(g.unidades[0])+'</b>.</div>';
+
+  h+='<div class="ancho"><h3>Comparador</h3>'+
+     '<div class="nota">Elegí las series que querés ver. Pasá el mouse sobre el gráfico '+
+     'para leer los valores de un día.</div>'+
+     pintarPicker()+
+     '<div class="chartbox" id="g-comp"><div class="cursor" id="cursor"></div>'+g.svg+'</div>'+
+     leyenda(lineas, g.modo==="base100")+aclara+'</div>';
+
+  /* --- tarjetas --- */
+  GRUPOS.forEach(gr=>{
+    const cards=gr.series.map(s=>tarjeta(s,i0,i1)).filter(Boolean).join("");
+    if(cards) h+='<div class="seccion">'+esc(gr.titulo)+'</div><div class="grid">'+cards+'</div>';
   });
 
-  /* gráficos comparativos */
-  const l2=[
-    {nom:"BADLAR", pts:tramo("Tasa BADLAR",i0,i1)},
-    {nom:"TAMAR",  pts:tramo("Tasa TAMAR",i0,i1)},
-  ].filter(l=>l.pts.length);
-  if(l2.length) h+='<div class="seccion">Comparativos</div><div class="grid">'+
-    '<div class="ancho"><h3>Tasas de interés (% nominal anual)</h3><div class="nota"></div>'+
-    grafico(l2,240)+'<div class="leyenda">'+l2.map((l,n)=>'<span><i style="background:'+
-    COLORES[n%COLORES.length]+'"></i>'+l.nom+'</span>').join("")+'</div></div></div>';
-
-  const l3=["Soja","Maiz","Trigo","Girasol","Sorgo"].map((g,n)=>(
-    {nom:g==="Maiz"?"Maíz":g, pts:tramo(g+" US$/t",i0,i1)})).filter(l=>l.pts.length);
-  if(l3.length) h+='<div class="grid"><div class="ancho"><h3>Granos, pizarra Rosario (US$ por tonelada)</h3>'+
-    '<div class="nota">La Cámara Arbitral publica sólo el último día hábil: la serie se acumula '+
-    'desde que este panel empezó a correr.</div>'+grafico(l3,240)+'<div class="leyenda">'+
-    l3.map((l,n)=>'<span><i style="background:'+COLORES[n%COLORES.length]+'"></i>'+l.nom+
-    '</span>').join("")+'</div></div></div>';
-
-  /* tabla */
-  const cols=GRUPOS.flatMap(g=>g.series).filter(s=>D.series[s.k]);
-  let t='<table><thead><tr><th>Fecha</th>'+cols.map(c=>'<th>'+c.n+
+  /* --- tabla --- */
+  const cols=TODAS;
+  let t='<table><thead><tr><th>Fecha</th>'+cols.map(c=>'<th>'+esc(c.n)+
         (c.u==="$/t"||c.u==="US$/t"?" "+c.u:"")+'</th>').join("")+'</tr></thead><tbody>';
   /* una fila = un dia con dato observado. Las bandas existen todos los dias del
-     calendario, incluidos sabados y domingos: por si solas no justifican una fila. */
-  const observadas = cols.map((c,n)=>({n, calc:c.k==="Banda inferior"||c.k==="Banda superior"}))
-                         .filter(o=>!o.calc).map(o=>o.n);
+     calendario, fines de semana incluidos: por si solas no justifican una fila. */
+  const obs = cols.map((c,n)=>({n, calc:c.k.indexOf("Banda")===0}))
+                  .filter(o=>!o.calc).map(o=>o.n);
   let filas=0;
   for(let i=i1;i>=i0 && filas<400;i--){
     const vals=cols.map(c=>D.series[c.k][i]);
-    if(observadas.every(n=>vals[n]===null||vals[n]===undefined)) continue;
+    if(obs.every(n=>vals[n]===null||vals[n]===undefined)) continue;
     filas++;
     t+='<tr><td>'+fmtFecha(fechas[i])+'</td>'+cols.map((c,n)=>{
       const v=vals[n];
@@ -339,11 +464,78 @@ function render(){
      '<button class="sec" onclick="window.print()">Imprimir o guardar en PDF</button></div></div>';
 
   document.getElementById("contenido").innerHTML=h;
+  document.getElementById("modo").textContent =
+    sel.length + (sel.length===1?" serie elegida":" series elegidas");
+  conectarPicker();
+  conectarTooltip();
+}
+
+/* ------------------------------------------------ interacción */
+function conectarPicker(){
+  document.querySelectorAll(".chip").forEach(b=>{
+    b.onclick=()=>{
+      const k=b.dataset.k, i=sel.indexOf(k);
+      if(i>=0) sel.splice(i,1); else sel.push(k);
+      render();
+    };
+  });
+  document.querySelectorAll(".pacciones button").forEach(b=>{
+    b.onclick=()=>{ sel=PRESETS[b.dataset.accion].filter(k=>POR_K.has(k)); render(); };
+  });
+  const c=document.getElementById("chk100");
+  if(c) c.onchange=()=>{ forzarBase100=c.checked; render(); };
+}
+
+function conectarTooltip(){
+  const caja=document.getElementById("g-comp");
+  const tip=document.getElementById("tip");
+  const cur=document.getElementById("cursor");
+  if(!caja||!ultimoGrafico||!ultimoGrafico.series) return;
+  const g=ultimoGrafico;
+
+  caja.onmousemove=(e)=>{
+    const r=caja.getBoundingClientRect();
+    const frac=(e.clientX-r.left)/r.width;          // 0..1 sobre el ancho dibujado
+    const xv=frac*g.W;                              // coordenada del viewBox
+    const dentro=(xv-g.ML)/(g.W-g.ML-g.MR);
+    if(dentro<0||dentro>1){ tip.style.opacity=0; cur.style.opacity=0; return; }
+    const i=Math.round(g.x0+dentro*(g.x1-g.x0));
+
+    let html='<b>'+fmtFecha(fechas[i])+'</b>';
+    let hay=false;
+    g.series.forEach(l=>{
+      // valor mas cercano hacia atras (los feriados no tienen dato)
+      let mejor=null;
+      for(let j=l.pts.length-1;j>=0;j--){ if(l.pts[j][0]<=i){ mejor=l.pts[j]; break; } }
+      if(!mejor) return;
+      hay=true;
+      const viejo = mejor[0]!==i ? ' <span style="opacity:.6">('+fmtFecha(fechas[mejor[0]])+')</span>' : '';
+      const val = g.modo==="base100"
+        ? (mejor[1]/l.base*100).toLocaleString("es-AR",{minimumFractionDigits:1,maximumFractionDigits:1})
+        : fmt(mejor[1], l.d, l.u);
+      html+='<span><i style="background:'+l.color+'"></i>'+esc(l.nom)+': <b style="display:inline;color:inherit">'+
+            val+'</b>'+viejo+'</span>';
+    });
+    if(!hay){ tip.style.opacity=0; cur.style.opacity=0; return; }
+
+    tip.innerHTML=html;
+    tip.style.opacity=1;
+    const tw=tip.offsetWidth, th=tip.offsetHeight;
+    let left=e.clientX+16, top=e.clientY-th/2;
+    if(left+tw>window.innerWidth-8) left=e.clientX-tw-16;
+    if(top<8) top=8;
+    if(top+th>window.innerHeight-8) top=window.innerHeight-th-8;
+    tip.style.left=left+"px"; tip.style.top=top+"px";
+
+    cur.style.opacity=.55;
+    cur.style.left=((g.px(i)/g.W)*r.width)+"px";
+  };
+  caja.onmouseleave=()=>{ tip.style.opacity=0; cur.style.opacity=0; };
 }
 
 function bajarCSV(){
   const [i0,i1]=rango();
-  const cols=GRUPOS.flatMap(g=>g.series).filter(s=>D.series[s.k]);
+  const cols=TODAS;
   let csv="fecha;"+cols.map(c=>c.n+(c.u?" ("+c.u+")":"")).join(";")+"\n";
   for(let i=i0;i<=i1;i++){
     const vals=cols.map(c=>D.series[c.k][i]);
@@ -365,7 +557,7 @@ document.getElementById("sub").textContent =
 if(D.incidencias && D.incidencias.length){
   document.getElementById("avisos").innerHTML='<div class="aviso"><b>Atención:</b> '+
     'en la última actualización fallaron estas fuentes, así que sus datos pueden estar '+
-    'desactualizados: '+D.incidencias.map(i=>i.fuente).join(" · ")+'.</div>';
+    'desactualizados: '+D.incidencias.map(i=>esc(i.fuente)).join(" · ")+'.</div>';
 }
 
 const d1=document.getElementById("d1"), d2=document.getElementById("d2");
@@ -381,7 +573,8 @@ document.querySelectorAll("#rapidos button").forEach(b=>{
     d2.value=fechas[fechas.length-1];
     if(m===0){ d1.value=fechas[0]; }
     else{ const f=new Date(d2.value); f.setMonth(f.getMonth()-m);
-          d1.value=f.toISOString().slice(0,10) < fechas[0] ? fechas[0] : f.toISOString().slice(0,10); }
+          const iso=f.toISOString().slice(0,10);
+          d1.value = iso < fechas[0] ? fechas[0] : iso; }
     marcar(b); render();
   };
 });
