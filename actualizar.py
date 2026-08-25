@@ -199,7 +199,7 @@ def bajar_pizarra():
         return float(s.replace(".", "").replace(",", "."))
 
     fila = {"fecha": f_pizarra.isoformat()}
-    faltan = []
+    faltan, sin_cotizar = [], []
     for g in GRANOS:
         # despues del nombre del grano vienen el precio en pesos y el precio en dolares
         bloque = re.search(
@@ -207,13 +207,21 @@ def bajar_pizarra():
             texto,
             re.I | re.S,
         )
-        if bloque:
-            fila[f"{g} $/t"] = num(bloque.group(2))
-            fila[f"{g} US$/t"] = num(bloque.group(4))
-        else:
+        if not bloque:
             faltan.append(g)
+            continue
+        # "S/C" = sin cotizacion y "(E)" = estimado por la Camara. En los dos casos
+        # el numero que sigue no es un precio de mercado: se descarta.
+        marcas = bloque.group(1) + bloque.group(3)
+        if re.search(r"S/C|\(E\)", marcas, re.I):
+            sin_cotizar.append(g)
+            continue
+        fila[f"{g} $/t"] = num(bloque.group(2))
+        fila[f"{g} US$/t"] = num(bloque.group(4))
+    if sin_cotizar:
+        print(f"  sin cotizacion en la pizarra: {', '.join(sin_cotizar)}")
     if faltan:
-        avisar("Pizarra Rosario", f"sin precio para: {', '.join(faltan)}")
+        avisar("Pizarra Rosario", f"no se pudo leer: {', '.join(faltan)}")
     if len(fila) == 1:
         raise RuntimeError("no se pudo leer ningun precio")
 
@@ -222,6 +230,79 @@ def bajar_pizarra():
     if tc:
         fila["Dolar BNA divisa comprador"] = num(tc.group(1))
     return fila
+
+
+"""
+Historico de la pizarra en pesos.
+
+La Camara Arbitral de Rosario publica en su sitio solo el ultimo dia habil, pero
+la Bolsa de Cereales publica las pizarras de todas las camaras arbitrales con un
+CSV por rango de fechas. Los precios de Rosario coinciden exactamente con los de
+la CAC (control hecho para el 21/08/2026). De ahi sale el historico en $/t.
+
+Ese CSV no trae la conversion a dolares de Rosario: los US$/t solo existen desde
+que este panel empezo a correr, tomados de la CAC.
+
+Un cero en ese archivo significa "sin cotizacion", no un precio de cero: se
+descarta y la fecha queda sin dato.
+"""
+
+BC_CSV = "https://www.bolsadecereales.com/admin/reportes/reportes_csv.php"
+BC_INICIO = date(2003, 1, 1)
+BC_GRANOS = {
+    "TRIGO": "Trigo",
+    "MAIZ": "Maiz",
+    "SOJA": "Soja",
+    "GIRASOL": "Girasol",
+    "SORGO": "Sorgo",
+}
+
+
+def bajar_pizarra_historico():
+    """Devuelve {'Soja $/t': Serie, ...} con la pizarra Rosario en pesos."""
+    import csv as _csv
+
+    puntos = {v: {} for v in BC_GRANOS.values()}
+    ceros = 0
+    for anio in range(BC_INICIO.year, HOY.year + 1):
+        d0 = max(BC_INICIO, date(anio, 1, 1))
+        d1 = min(HOY, date(anio, 12, 31))
+        if d0 > d1:
+            continue
+        url = f"{BC_CSV}?reporte=camara&desde={d0.isoformat()}&hasta={d1.isoformat()}&puerto="
+        try:
+            txt = pedir(url).text
+        except Exception as e:  # noqa: BLE001
+            avisar(f"Pizarra historica {anio}", e)
+            continue
+        rd = _csv.reader(io.StringIO(txt.lstrip("﻿")), delimiter=";")
+        next(rd, None)
+        for r in rd:
+            if len(r) < 4:
+                continue
+            f_txt, cereal, puerto, pesos = r[0].strip(), r[1].strip().upper(), r[2].strip().upper(), r[3].strip()
+            if puerto != "ROSARIO" or cereal not in BC_GRANOS:
+                continue
+            try:
+                v = float(pesos.replace(",", "."))
+            except ValueError:
+                continue
+            if v <= 0:  # sin cotizacion ese dia
+                ceros += 1
+                continue
+            try:
+                puntos[BC_GRANOS[cereal]][date.fromisoformat(f_txt)] = v
+            except ValueError:
+                continue
+
+    salida = {}
+    for g, d in puntos.items():
+        if d:
+            salida[f"{g} $/t"] = pd.Series(d).sort_index()
+    if not salida:
+        raise RuntimeError("sin datos")
+    print(f"  ({ceros} celdas sin cotizacion descartadas, no se cuentan como cero)")
+    return salida
 
 
 def acumular_granos(fila):
@@ -380,6 +461,18 @@ def main():
         gr2 = gr2.set_index("fecha").sort_index()
         for col in gr2.columns:
             columnas[col] = pd.to_numeric(gr2[col], errors="coerce").dropna()
+
+    # historico en pesos: manda sobre lo acumulado, que solo cubre el ultimo dia
+    try:
+        hist = bajar_pizarra_historico()
+        for k, s in hist.items():
+            columnas[k] = s.combine_first(columnas[k]) if k in columnas else s
+        print(
+            f"  Pizarra historica: {len(hist)} granos, "
+            f"desde {min(s.index.min() for s in hist.values())}"
+        )
+    except Exception as e:  # noqa: BLE001
+        avisar("Pizarra historica", e)
 
     # bandas cambiarias (calculadas, no publicadas como serie por el BCRA)
     if "IPC mensual" in columnas:
