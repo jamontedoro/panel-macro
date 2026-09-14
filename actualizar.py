@@ -317,14 +317,17 @@ def bajar_pizarra_historico():
     cache = DATOS / "granos_historico.csv"
     puntos = {v: {} for v in BC_GRANOS.values()}
 
+    # el cache es ancho: una fila por fecha, una columna por grano
     guardado = 0
     if cache.exists():
         prev = pd.read_csv(cache)
         for _, r in prev.iterrows():
-            g = str(r["grano"])
-            if g in puntos:
-                puntos[g][date.fromisoformat(str(r["fecha"]))] = float(r["pesos"])
-                guardado += 1
+            f = date.fromisoformat(str(r["fecha"]))
+            for g in puntos:
+                v = r.get(g)
+                if v is not None and pd.notna(v):
+                    puntos[g][f] = float(v)
+                    guardado += 1
         print(f"  cache de pizarra: {guardado} valores ya guardados")
 
     ultima = max((max(d) for d in puntos.values() if d), default=None)
@@ -359,17 +362,20 @@ def bajar_pizarra_historico():
         raise RuntimeError("sin datos y sin cache")
 
     # se reescribe el cache con todo lo que hay
-    filas = [
-        {"fecha": f.isoformat(), "grano": g, "pesos": v}
-        for g, d in puntos.items()
-        for f, v in d.items()
-    ]
-    pd.DataFrame(filas).sort_values(["fecha", "grano"]).to_csv(cache, index=False)
+    orden = list(BC_GRANOS.values())
+    todas = sorted({f for d in puntos.values() for f in d})
+    pd.DataFrame(
+        [
+            dict({"fecha": f.isoformat()}, **{g: puntos[g].get(f) for g in orden})
+            for f in todas
+        ]
+    ).to_csv(cache, index=False, float_format="%g")
 
+    total = sum(len(d) for d in puntos.values())
     salida = {f"{g} $/t": pd.Series(d).sort_index() for g, d in puntos.items() if d}
     print(
-        f"  pizarra historica: {len(filas)} valores, {ceros} celdas sin cotizacion "
-        f"descartadas, {fallos} tramo(s) fallado(s)"
+        f"  pizarra historica: {total} valores en {len(todas)} fechas, {ceros} celdas "
+        f"sin cotizacion descartadas, {fallos} tramo(s) fallado(s)"
     )
     return salida
 
