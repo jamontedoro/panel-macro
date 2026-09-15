@@ -351,7 +351,8 @@ def _comparar_historicos(previo, nuevo):
         print(f"    {linea}")
     for linea in ejemplos[:12]:
         print(f"      {linea}")
-    avisar("Pizarra historica (cambio de fuente)", "; ".join(resumen))
+    # A proposito no se registra como incidencia: no es una fuente que fallo,
+    # es el cambio de fuente hecho a proposito. Queda en el log de la corrida.
 
 
 def bajar_pizarra_historico():
