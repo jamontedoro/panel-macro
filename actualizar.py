@@ -6,7 +6,8 @@ Panel macro Argentina - descarga y consolidacion de series.
 Corre una vez por dia (GitHub Actions, 11:00 hora Argentina).
 Escribe:
     datos/series.csv        historico consolidado, una fila por fecha
-    datos/granos.csv        pizarra Rosario acumulada dia a dia
+    datos/granos.csv        pizarra Rosario del dia, acumulada corrida a corrida
+    datos/granos_historico.csv  pizarra Rosario en pesos, 2003 en adelante
     datos/incidencias.csv   registro de fuentes que fallaron
     index.html              el panel, con los datos embebidos
 
@@ -238,131 +239,208 @@ def bajar_pizarra():
 """
 Historico de la pizarra en pesos.
 
-La Camara Arbitral de Rosario publica en su sitio solo el ultimo dia habil, pero
-la Bolsa de Cereales publica las pizarras de todas las camaras arbitrales con un
-CSV por rango de fechas. Los precios de Rosario coinciden exactamente con los de
-la CAC (control hecho para el 21/08/2026). De ahi sale el historico en $/t.
+La portada de la Camara Arbitral de Rosario publica solo el ultimo dia habil,
+pero el mismo sitio tiene una consulta por rango de fechas, con exportacion a
+Excel, que llega hasta 1928:
 
-Ese CSV no trae la conversion a dolares de Rosario: los US$/t solo existen desde
-que este panel empezo a correr, tomados de la CAC.
+    https://www.cac.bcr.com.ar/es/precios-de-pizarra/consultas
 
-Un cero en ese archivo significa "sin cotizacion", no un precio de cero: se
-descarta y la fecha queda sin dato.
+De ahi sale el historico en $/t: la misma fuente que el dato diario, sin
+intermediarios.
+
+Por que esta consulta y no otra fuente: distingue explicitamente los dias sin
+cotizacion ("S/C") de los precios estimativos ("(E)"). Pidiendo type=pizarra el
+listado trae unicamente precios de pizarra y marca S/C todo lo demas. Un precio
+estimativo no es un precio de mercado y nunca entra al panel.
+
+  "Cuando la Comision de Semana no conoce precios por mercaderia disponible con
+   entrega inmediata y pago al contado, o cuando los conocidos no se consideren
+   representativos de la realidad del mercado, NO SE FIJAN PRECIOS DE PIZARRA.
+   En tal caso establece PRECIOS ESTIMATIVOS."
+
+Control hecho contra la propia Camara: girasol, junio de 2015. Se fijo pizarra
+solo el 18 (1.850) y el 23 (1.850); los demas dias fueron estimativos. El
+archivo guarda valor exactamente esos dos dias.
+
+La conversion a dolares no existe en esta consulta: los US$/t solo estan desde
+que el panel empezo a correr, tomados de la portada.
 """
 
-BC_CSV = "https://www.bolsadecereales.com/admin/reportes/reportes_csv.php"
-BC_INICIO = date(2003, 1, 1)
-BC_GRANOS = {
-    "TRIGO": "Trigo",
-    "MAIZ": "Maiz",
-    "SOJA": "Soja",
-    "GIRASOL": "Girasol",
-    "SORGO": "Sorgo",
-}
+CAC_EXPORT = "https://www.cac.bcr.com.ar/es/api/prices/987/export"
+CAC_PRODUCTOS = {"Trigo": 8, "Maiz": 3, "Soja": 13, "Girasol": 9, "Sorgo": 6}
+CAC_INICIO = date(2003, 1, 1)
+CAC_TRAMO = 2  # anios por consulta: con tramos mas largos el sitio devuelve error
+MARCA_FUENTE = DATOS / "fuente_historico.txt"
+EPOCA_EXCEL = datetime(1899, 12, 30)
 
 
-# El sitio rechaza con 403 a los clientes que se identifican como robots, asi que
-# hay que pedir como pediria un navegador: cabeceras completas y una visita previa
-# a la pagina para que el servidor abra la sesion.
-NAVEGADOR = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/csv,application/csv,text/plain,*/*;q=0.8",
-    "Accept-Language": "es-AR,es;q=0.9,en;q=0.8",
-    "Referer": "https://www.bolsadecereales.com/camara-arbitral",
-    "Upgrade-Insecure-Requests": "1",
-}
+def _fecha_de_celda(v):
+    """La fecha puede venir como fecha o como numero de serie de Excel."""
+    if isinstance(v, (datetime, pd.Timestamp)):
+        return v.date()
+    if isinstance(v, (int, float)) and not pd.isna(v) and 30000 <= float(v) <= 80000:
+        return (EPOCA_EXCEL + timedelta(days=float(v))).date()
+    return None
 
 
-def _leer_csv_bc(txt, puntos):
-    """Suma las filas de Rosario al acumulador. Devuelve cuantos ceros descarto."""
-    import csv as _csv
+def _leer_export_cac(contenido):
+    """
+    Lee el Excel de la consulta. Devuelve ([(fecha, precio), ...], sin_cotizar).
 
-    ceros = 0
-    rd = _csv.reader(io.StringIO(txt.lstrip("﻿")), delimiter=";")
-    next(rd, None)
-    for r in rd:
-        if len(r) < 4:
+    Dos columnas: fecha de operacion y precio. Donde no hubo pizarra el precio
+    viene como texto "S/C" y esa fecha queda afuera: no es un precio de cero.
+    """
+    hoja = pd.read_excel(io.BytesIO(contenido), header=None, engine="openpyxl")
+    filas, sin_cotizar = [], 0
+    for _, r in hoja.iterrows():
+        f = _fecha_de_celda(r.get(0))
+        if f is None:  # titulo, nombre del grano o encabezado
             continue
-        f_txt = r[0].strip()
-        cereal = r[1].strip().upper()
-        puerto = r[2].strip().upper()
-        pesos = r[3].strip()
-        if puerto != "ROSARIO" or cereal not in BC_GRANOS:
+        v = r.get(1)
+        if v is None or isinstance(v, str) or pd.isna(v):
+            sin_cotizar += 1
             continue
+        v = float(v)
+        if v <= 0:
+            sin_cotizar += 1
+            continue
+        filas.append((f, v))
+    return filas, sin_cotizar
+
+
+def _leer_cache_historico(ruta):
+    puntos = {g: {} for g in CAC_PRODUCTOS}
+    if not ruta.exists():
+        return puntos
+    for _, r in pd.read_csv(ruta).iterrows():
         try:
-            v = float(pesos.replace(",", "."))
+            f = date.fromisoformat(str(r["fecha"]))
         except ValueError:
             continue
-        if v <= 0:  # sin cotizacion ese dia: no es un precio de cero
-            ceros += 1
-            continue
-        try:
-            puntos[BC_GRANOS[cereal]][date.fromisoformat(f_txt)] = v
-        except ValueError:
-            continue
-    return ceros
+        for g in puntos:
+            v = r.get(g)
+            if v is not None and pd.notna(v):
+                puntos[g][f] = float(v)
+    return puntos
+
+
+def _comparar_historicos(previo, nuevo):
+    """Informa que cambia al reemplazar el historico viejo por el nuevo."""
+    resumen, ejemplos = [], []
+    for g in CAC_PRODUCTOS:
+        antes, ahora = previo[g], nuevo[g]
+        altas = sorted(set(ahora) - set(antes))
+        bajas = sorted(set(antes) - set(ahora))
+        distintos = sorted(
+            f for f in set(antes) & set(ahora) if abs(antes[f] - ahora[f]) > 0.01
+        )
+        if altas or bajas or distintos:
+            resumen.append(
+                f"{g}: +{len(altas)} altas, -{len(bajas)} bajas, "
+                f"{len(distintos)} valores distintos"
+            )
+        for f in bajas[:3]:
+            ejemplos.append(f"{g} {f}: {antes[f]:g} -> sin pizarra")
+        for f in distintos[:3]:
+            ejemplos.append(f"{g} {f}: {antes[f]:g} -> {ahora[f]:g}")
+    if not resumen:
+        print("  el historico nuevo coincide dato por dato con el anterior")
+        return
+    print("  cambios al pasar el historico a la CAC:")
+    for linea in resumen:
+        print(f"    {linea}")
+    for linea in ejemplos[:12]:
+        print(f"      {linea}")
+    avisar("Pizarra historica (cambio de fuente)", "; ".join(resumen))
 
 
 def bajar_pizarra_historico():
     """
     Devuelve {'Soja $/t': Serie, ...} con la pizarra Rosario en pesos.
 
-    Lo bajado se guarda en datos/granos_historico.csv. En la primera corrida se
-    piden los ~24 anios completos; despues solo se vuelve a pedir el ultimo tramo.
-    Si el sitio falla, se sigue trabajando con lo que ya estaba guardado.
+    Guarda lo bajado en datos/granos_historico.csv. Si ese archivo ya se armo
+    con esta fuente, solo se vuelve a pedir el ultimo tramo; si no, se baja todo
+    de nuevo y se informa que cambia respecto de lo que habia.
+
+    Si la descarga completa sale peor que lo guardado, no se pisa: se conserva
+    el archivo anterior y queda la incidencia.
     """
     cache = DATOS / "granos_historico.csv"
-    puntos = {v: {} for v in BC_GRANOS.values()}
+    previo = _leer_cache_historico(cache)
+    guardado = sum(len(d) for d in previo.values())
 
-    # el cache es ancho: una fila por fecha, una columna por grano
-    guardado = 0
-    if cache.exists():
-        prev = pd.read_csv(cache)
-        for _, r in prev.iterrows():
-            f = date.fromisoformat(str(r["fecha"]))
-            for g in puntos:
-                v = r.get(g)
-                if v is not None and pd.notna(v):
-                    puntos[g][f] = float(v)
-                    guardado += 1
+    marca = MARCA_FUENTE.read_text().strip() if MARCA_FUENTE.exists() else ""
+    completo = not (guardado and marca == "cac")
+    if guardado:
         print(f"  cache de pizarra: {guardado} valores ya guardados")
+    if completo and guardado:
+        print("  el cache no viene de la CAC: se baja el historico completo")
 
-    ultima = max((max(d) for d in puntos.values() if d), default=None)
-    desde = max(BC_INICIO, ultima - timedelta(days=15)) if ultima else BC_INICIO
+    ultima = max((max(d) for d in previo.values() if d), default=None)
+    desde = CAC_INICIO if completo else max(CAC_INICIO, ultima - timedelta(days=15))
 
-    ses = requests.Session()
-    ses.headers.update(NAVEGADOR)
-    try:  # visita previa: algunos sitios exigen la cookie de sesion
-        ses.get("https://www.bolsadecereales.com/camara-arbitral", timeout=45)
-    except Exception as e:  # noqa: BLE001
-        print(f"  no se pudo abrir sesion en la Bolsa de Cereales: {e}")
+    nuevo = {g: {} for g in CAC_PRODUCTOS}
+    fallados = set()
+    fallos = sin_cotizar = 0
+    for grano, pid in CAC_PRODUCTOS.items():
+        anio = desde.year
+        while anio <= HOY.year:
+            d0 = max(desde, date(anio, 1, 1))
+            d1 = min(HOY, date(min(anio + CAC_TRAMO - 1, HOY.year), 12, 31))
+            if d0 <= d1:
+                url = (
+                    f"{CAC_EXPORT}?product={pid}&type=pizarra&period=day"
+                    f"&date_start={d0.isoformat()}&date_end={d1.isoformat()}"
+                )
+                try:
+                    filas, sc = _leer_export_cac(pedir(url, intentos=3).content)
+                    sin_cotizar += sc
+                    nuevo[grano].update(dict(filas))
+                except Exception as e:  # noqa: BLE001
+                    fallos += 1
+                    fallados.add(grano)
+                    avisar(f"Pizarra historica {grano} {d0.year}-{d1.year}", e)
+            anio += CAC_TRAMO
+        print(f"    {grano}: {len(nuevo[grano])} dias con pizarra")
 
-    ceros, fallos, anio = 0, 0, desde.year
-    while anio <= HOY.year:
-        hasta_anio = min(anio + 3, HOY.year)  # tramos de 4 anios
-        d0 = max(desde, date(anio, 1, 1))
-        d1 = min(HOY, date(hasta_anio, 12, 31))
-        if d0 <= d1:
-            url = (
-                f"{BC_CSV}?reporte=camara&desde={d0.isoformat()}"
-                f"&hasta={d1.isoformat()}&puerto="
+    if completo:
+        # Red de seguridad para no pisar un historico bueno con una descarga mala.
+        # Que un grano pierda valores puede ser correcto (la Camara los marca S/C),
+        # asi que no se mira grano por grano: se mira que no haya fallado ningun
+        # tramo y que el total no se desplome.
+        bajados = sum(len(d) for d in nuevo.values())
+        derrumbe = guardado and bajados < guardado * 0.90
+        if guardado and (fallos or derrumbe):
+            motivo = (
+                f"{fallos} tramo(s) fallado(s)"
+                if fallos
+                else f"bajaron {bajados} valores contra {guardado} guardados"
             )
-            try:
-                r = pedir(url, intentos=3, sesion=ses)
-                ceros += _leer_csv_bc(r.text, puntos)
-            except Exception as e:  # noqa: BLE001
-                fallos += 1
-                avisar(f"Pizarra historica {d0.year}-{d1.year}", e)
-        anio = hasta_anio + 1
+            avisar(
+                "Pizarra historica",
+                f"descarga incompleta ({motivo}): se conserva el historico anterior",
+            )
+            puntos, completo = previo, False
+        else:
+            if guardado:
+                _comparar_historicos(previo, nuevo)
+            puntos = nuevo
+    else:
+        # incremental: lo pedido de nuevo manda sobre la ventana consultada, asi
+        # una correccion de la Camara tambien borra un valor que ya no corresponde.
+        puntos = {}
+        for g in CAC_PRODUCTOS:
+            if g in fallados:
+                puntos[g] = previo[g]
+                continue
+            fusion = {f: v for f, v in previo[g].items() if f < desde}
+            fusion.update(nuevo[g])
+            puntos[g] = fusion
 
     if not any(puntos.values()):
         raise RuntimeError("sin datos y sin cache")
 
-    # se reescribe el cache con todo lo que hay
-    orden = list(BC_GRANOS.values())
+    orden = list(CAC_PRODUCTOS)
     todas = sorted({f for d in puntos.values() for f in d})
     pd.DataFrame(
         [
@@ -370,14 +448,15 @@ def bajar_pizarra_historico():
             for f in todas
         ]
     ).to_csv(cache, index=False, float_format="%g")
+    if completo or marca == "cac":
+        MARCA_FUENTE.write_text("cac\n")
 
     total = sum(len(d) for d in puntos.values())
-    salida = {f"{g} $/t": pd.Series(d).sort_index() for g, d in puntos.items() if d}
     print(
-        f"  pizarra historica: {total} valores en {len(todas)} fechas, {ceros} celdas "
-        f"sin cotizacion descartadas, {fallos} tramo(s) fallado(s)"
+        f"  pizarra historica: {total} valores en {len(todas)} fechas, "
+        f"{sin_cotizar} dias sin cotizacion descartados, {fallos} tramo(s) fallado(s)"
     )
-    return salida
+    return {f"{g} $/t": pd.Series(d).sort_index() for g, d in puntos.items() if d}
 
 
 def acumular_granos(fila):
@@ -537,11 +616,18 @@ def main():
         for col in gr2.columns:
             columnas[col] = pd.to_numeric(gr2[col], errors="coerce").dropna()
 
-    # historico en pesos: manda sobre lo acumulado, que solo cubre el ultimo dia
+    # Historico en pesos. Manda sobre lo acumulado dia a dia y no se completa con
+    # el: dentro del tramo que cubre el historico, un dia sin pizarra es un dia sin
+    # dato. Si se rellenara con granos.csv volveria a entrar como precio lo que la
+    # Camara marco S/C (fue el caso del girasol del 21/08/2026). De lo acumulado
+    # solo se conserva lo posterior al ultimo dia del historico.
     try:
         hist = bajar_pizarra_historico()
         for k, s in hist.items():
-            columnas[k] = s.combine_first(columnas[k]) if k in columnas else s
+            if k in columnas:
+                posterior = columnas[k][columnas[k].index > s.index.max()]
+                s = pd.concat([s, posterior]).sort_index()
+            columnas[k] = s
         print(
             f"  Pizarra historica: {len(hist)} granos, "
             f"desde {min(s.index.min() for s in hist.values())}"
